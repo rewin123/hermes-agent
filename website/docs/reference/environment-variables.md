@@ -657,6 +657,13 @@ Advanced per-platform knobs for throttling the outbound message batcher. Most us
 | `HERMES_TUI_THEME` | Force the TUI color theme: `light`, `dark`, or a raw 6-character background hex (e.g. `ffffff` or `1a1a2e`). When unset, Hermes auto-detects using `COLORFGBG` and terminal background queries; this variable overrides detection on terminals (Ghostty, Warp, iTerm2, etc.) that don't set `COLORFGBG`. |
 | `HERMES_INFERENCE_MODEL` | Force the model for `hermes -z` / `hermes chat` without mutating `config.yaml`. Pairs with the `--provider` flag. Useful for scripted callers (sweeper, CI, batch runners) that need to override the default model per run. |
 
+## Updates
+
+| Variable | Description |
+|----------|-------------|
+| `HERMES_AUTO_UPDATE_CHECK` | Opt **into** the automatic background update check at startup (truthy: `1`, `true`, `yes`, `on`). **Off by default** — the update check is on-demand: with this unset, launching Hermes issues no update network call, so a local-model install never contacts `github.com` / `pypi.org` unless the user explicitly runs `hermes update`, `hermes version --check-updates`, or the dashboard's check-for-updates button. Enable this to restore the prefetched "update available" banner/TUI badge. |
+| `HERMES_TERMUX_PREFETCH_UPDATES` | On Termux/Android only, additionally gate the startup prefetch (set to `1` to allow it). Has no effect unless `HERMES_AUTO_UPDATE_CHECK` is also enabled. |
+
 ## Session Settings
 
 | Variable | Description |
