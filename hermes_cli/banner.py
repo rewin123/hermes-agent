@@ -530,8 +530,35 @@ _update_result: Optional[int] = None
 _update_check_done = threading.Event()
 
 
+def _auto_update_check_enabled() -> bool:
+    """Whether the update check may run automatically at startup.
+
+    Default: OFF. The update check is **on-demand** — it runs only when the
+    user explicitly asks for it (``hermes update``, ``hermes version
+    --check-updates``, or the dashboard's "check for updates" button, all of
+    which call ``check_for_updates()`` directly). The unsolicited background
+    prefetch at launch is suppressed so a default (local-model) install never
+    contacts github.com / pypi.org without the user initiating it — the
+    relevant posture on privacy-sensitive machines.
+
+    Set ``HERMES_AUTO_UPDATE_CHECK=1`` (also ``true``/``yes``/``on``) to
+    restore the automatic background check at startup.
+    """
+    val = os.environ.get("HERMES_AUTO_UPDATE_CHECK", "").strip().lower()
+    return val in ("1", "true", "yes", "on")
+
+
 def prefetch_update_check():
-    """Kick off update check in a background daemon thread."""
+    """Kick off update check in a background daemon thread.
+
+    No-op unless the automatic check is explicitly enabled via
+    ``HERMES_AUTO_UPDATE_CHECK`` (see ``_auto_update_check_enabled``). By
+    default the update check is on-demand only, so this issues no network
+    request at startup. When disabled, ``get_update_result()`` simply returns
+    ``None`` and the banner/TUI show no "update available" badge.
+    """
+    if not _auto_update_check_enabled():
+        return
     def _run():
         global _update_result
         _update_result = check_for_updates()

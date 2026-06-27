@@ -3558,6 +3558,27 @@ def _resolve_single_provider(
     )
     return client
 
+def _aux_local_only() -> bool:
+    """Whether auxiliary tasks must stay on the main provider (no cloud fallback).
+
+    When ``HERMES_AUX_LOCAL_ONLY`` is truthy (``1``/``true``/``yes``/``on``),
+    ``_resolve_auto`` uses only the user's main provider + main model (Step 1)
+    for side tasks — title generation, conversation/trajectory compression,
+    session search, web-page extraction, TTS tagging, etc. If the main
+    provider yields no client, resolution returns ``(None, None)`` instead of
+    falling through to the cloud aggregator chain (Steps 2 & 3). This
+    guarantees auxiliary content never leaves a local main endpoint, even
+    when cloud credentials happen to be present in the environment — the side
+    task is skipped (fail-closed) rather than silently routed to a vendor.
+
+    Deliberate per-task overrides (``auxiliary.<task>.provider: openrouter``)
+    are a separate, explicit opt-in and are intentionally NOT governed by this
+    switch — it only suppresses the *automatic* fallback chain.
+    """
+    val = os.environ.get("HERMES_AUX_LOCAL_ONLY", "").strip().lower()
+    return val in ("1", "true", "yes", "on")
+
+
 def _resolve_auto(
     main_runtime: Optional[Dict[str, Any]] = None,
     task: Optional[str] = None,
@@ -3658,6 +3679,19 @@ def _resolve_auto(
                 logger.info("Auxiliary auto-detect: using main provider %s (%s)",
                             main_provider, resolved or main_model)
                 return client, resolved or main_model
+
+    # ── Privacy guard: HERMES_AUX_LOCAL_ONLY ────────────────────────────
+    # Step 1 (main provider + main model) did not produce a client. With
+    # local-only mode enabled, do NOT fall through to the cloud aggregator
+    # chain below — auxiliary content (titles, compression snippets, …) must
+    # never leave the main endpoint, even if cloud credentials are present.
+    # Fail closed: skip the side task instead of routing it to a vendor.
+    if _aux_local_only():
+        logger.info(
+            "Auxiliary local-only (HERMES_AUX_LOCAL_ONLY): main provider "
+            "unavailable; cloud fallback disabled — skipping side task "
+            "(task=%s)", task or "?")
+        return None, None
 
     # ── Step 2: user-configured fallback policy ─────────────────────────
     # In auto mode, respect the task-specific fallback chain first, then the

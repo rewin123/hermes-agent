@@ -313,9 +313,13 @@ def test_check_for_updates_non_docker_still_checks(tmp_path, monkeypatch):
     mock_run.assert_not_called()
 
 
-def test_prefetch_non_blocking():
+def test_prefetch_non_blocking(monkeypatch):
     """prefetch_update_check() should return immediately without blocking."""
     import hermes_cli.banner as banner
+
+    # The background prefetch is opt-in (on-demand by default); enable it so
+    # this test exercises the threading mechanics.
+    monkeypatch.setenv("HERMES_AUTO_UPDATE_CHECK", "1")
 
     # Reset module state
     banner._update_result = None
@@ -332,6 +336,41 @@ def test_prefetch_non_blocking():
         # Wait for the background thread to finish
         banner._update_check_done.wait(timeout=5)
         assert banner._update_result == 5
+
+
+def test_prefetch_disabled_by_default(monkeypatch):
+    """Without HERMES_AUTO_UPDATE_CHECK the prefetch is a no-op.
+
+    The update check is on-demand by default: launching must not fire the
+    background network call, so check_for_updates() is never invoked and no
+    result is recorded (get_update_result() stays None → no update badge).
+    """
+    import hermes_cli.banner as banner
+
+    monkeypatch.delenv("HERMES_AUTO_UPDATE_CHECK", raising=False)
+
+    banner._update_result = None
+    banner._update_check_done = threading.Event()
+
+    with patch.object(banner, "check_for_updates", return_value=5) as mock_check:
+        banner.prefetch_update_check()
+        # No background thread should have called check_for_updates().
+        banner._update_check_done.wait(timeout=0.5)
+        mock_check.assert_not_called()
+        assert banner._update_result is None
+        assert not banner._update_check_done.is_set()
+
+
+def test_prefetch_enabled_truthy_values(monkeypatch):
+    """HERMES_AUTO_UPDATE_CHECK accepts the usual truthy spellings."""
+    import hermes_cli.banner as banner
+
+    for val in ("1", "true", "TRUE", "yes", "on"):
+        monkeypatch.setenv("HERMES_AUTO_UPDATE_CHECK", val)
+        assert banner._auto_update_check_enabled() is True, val
+    for val in ("0", "false", "no", "off", ""):
+        monkeypatch.setenv("HERMES_AUTO_UPDATE_CHECK", val)
+        assert banner._auto_update_check_enabled() is False, val
 
 
 def test_invalidate_update_cache_clears_all_profiles(tmp_path):

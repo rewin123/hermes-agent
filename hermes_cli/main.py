@@ -2295,9 +2295,13 @@ def cmd_chat(args):
         print("You can run 'hermes setup' at any time to configure.")
         sys.exit(1)
 
-    # Start update check in background (runs while other init happens).
-    # On Termux this imports rich/prompt_toolkit in the foreground and then
-    # competes for CPU on single-core devices, so keep it opt-in there.
+    # Optionally start the update check in the background (runs while other
+    # init happens). On-demand by default: prefetch_update_check() is a no-op
+    # unless HERMES_AUTO_UPDATE_CHECK is set, so a default install issues no
+    # update network call at startup (see banner._auto_update_check_enabled).
+    # The Termux gate stays as an additional opt-in there: that platform
+    # imports rich/prompt_toolkit in the foreground and competes for CPU on
+    # single-core devices.
     if _termux_should_prefetch_update_check():
         try:
             from hermes_cli.banner import prefetch_update_check
