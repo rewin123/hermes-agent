@@ -249,6 +249,122 @@ class TestResolveAutoMainFirst:
         assert mock_resolve.call_args.kwargs["api_mode"] == "chat_completions"
 
 
+class TestAuxLocalOnly:
+    """HERMES_AUX_LOCAL_ONLY pins aux tasks to the main provider (no cloud fallback)."""
+
+    def test_local_only_blocks_cloud_fallback_when_main_unavailable(self, monkeypatch):
+        """Main provider configured but yields no client → return (None, None),
+        and the cloud fallback chain is never consulted."""
+        monkeypatch.setenv("HERMES_AUX_LOCAL_ONLY", "1")
+        # Cloud creds present in the environment — must still be ignored.
+        monkeypatch.setenv("OPENROUTER_API_KEY", "or-key")
+
+        with patch(
+            "agent.auxiliary_client._read_main_provider", return_value="custom",
+        ), patch(
+            "agent.auxiliary_client._read_main_model", return_value="local-model",
+        ), patch(
+            "agent.auxiliary_client.resolve_provider_client",
+            return_value=(None, None),  # local endpoint down
+        ), patch(
+            "agent.auxiliary_client._try_configured_fallback_chain",
+        ) as mock_task_chain, patch(
+            "agent.auxiliary_client._try_main_fallback_chain",
+        ) as mock_main_chain, patch(
+            "agent.auxiliary_client._try_openrouter",
+        ) as mock_openrouter:
+            from agent.auxiliary_client import _resolve_auto
+
+            client, model = _resolve_auto(task="title_generation")
+
+        assert client is None
+        assert model is None
+        # No fallback path may run when local-only is enabled.
+        mock_task_chain.assert_not_called()
+        mock_main_chain.assert_not_called()
+        mock_openrouter.assert_not_called()
+
+    def test_local_only_blocks_when_no_main_config(self, monkeypatch):
+        """No main provider configured + local-only → (None, None), no chain."""
+        monkeypatch.setenv("HERMES_AUX_LOCAL_ONLY", "true")
+        monkeypatch.setenv("OPENROUTER_API_KEY", "or-key")
+
+        with patch(
+            "agent.auxiliary_client._read_main_provider", return_value="",
+        ), patch(
+            "agent.auxiliary_client._read_main_model", return_value="",
+        ), patch(
+            "agent.auxiliary_client._try_openrouter",
+        ) as mock_openrouter:
+            from agent.auxiliary_client import _resolve_auto
+
+            client, model = _resolve_auto(task="compression")
+
+        assert client is None
+        assert model is None
+        mock_openrouter.assert_not_called()
+
+    def test_local_only_still_uses_main_provider(self, monkeypatch):
+        """Local-only must NOT break the happy path: a working main client is used."""
+        monkeypatch.setenv("HERMES_AUX_LOCAL_ONLY", "yes")
+
+        with patch(
+            "agent.auxiliary_client._read_main_provider", return_value="custom",
+        ), patch(
+            "agent.auxiliary_client._read_main_model", return_value="local-model",
+        ), patch(
+            "agent.auxiliary_client.resolve_provider_client"
+        ) as mock_resolve:
+            mock_client = MagicMock()
+            mock_resolve.return_value = (mock_client, "local-model")
+
+            from agent.auxiliary_client import _resolve_auto
+
+            client, model = _resolve_auto(task="title_generation")
+
+        assert client is mock_client
+        assert model == "local-model"
+
+    def test_disabled_by_default_allows_fallback(self, monkeypatch):
+        """Without the env var, the cloud fallback chain still runs (no regression)."""
+        monkeypatch.delenv("HERMES_AUX_LOCAL_ONLY", raising=False)
+
+        chain_client = MagicMock()
+        with patch(
+            "agent.auxiliary_client._read_main_provider", return_value="custom",
+        ), patch(
+            "agent.auxiliary_client._read_main_model", return_value="local-model",
+        ), patch(
+            "agent.auxiliary_client.resolve_provider_client",
+            return_value=(None, None),  # local endpoint down
+        ), patch(
+            "agent.auxiliary_client._try_configured_fallback_chain",
+            return_value=(None, None, ""),
+        ), patch(
+            "agent.auxiliary_client._try_main_fallback_chain",
+            return_value=(None, None, ""),
+        ), patch(
+            "agent.auxiliary_client._try_openrouter",
+            return_value=(chain_client, "google/gemini-3-flash-preview"),
+        ):
+            from agent.auxiliary_client import _resolve_auto
+
+            client, model = _resolve_auto(task="title_generation")
+
+        assert client is chain_client
+        assert model == "google/gemini-3-flash-preview"
+
+    def test_truthy_spellings(self, monkeypatch):
+        import agent.auxiliary_client as aux
+
+        for val in ("1", "true", "TRUE", "yes", "on"):
+            monkeypatch.setenv("HERMES_AUX_LOCAL_ONLY", val)
+            assert aux._aux_local_only() is True, val
+        for val in ("0", "false", "no", "off", ""):
+            monkeypatch.setenv("HERMES_AUX_LOCAL_ONLY", val)
+            assert aux._aux_local_only() is False, val
+
+
 # ── Vision — resolve_vision_provider_client ─────────────────────────────────
 
 

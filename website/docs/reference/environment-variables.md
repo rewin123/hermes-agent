@@ -703,6 +703,10 @@ Older configs with `compression.summary_model`, `compression.summary_provider`, 
 
 For task-specific direct endpoints, Hermes uses the task's configured API key or `OPENAI_API_KEY`. It does not reuse `OPENROUTER_API_KEY` for those custom endpoints.
 
+| Variable | Description |
+|----------|-------------|
+| `HERMES_AUX_LOCAL_ONLY` | Privacy guard (truthy: `1`, `true`, `yes`, `on`). Pins **`auto`** auxiliary tasks — session-title generation, context/trajectory compression, session search, web-page summarization, TTS tagging — to your **main provider + main model** only. When the main provider yields no client, resolution returns nothing instead of falling through to the cloud aggregator chain (OpenRouter/Nous/etc.), so side-task content **never leaves a local main endpoint even if cloud credentials are present** in the environment — the side task is skipped (fail-closed) rather than routed to a vendor. By default (unset) the automatic cloud fallback remains enabled. Deliberate per-task overrides (`auxiliary.<task>.provider: openrouter`) are an explicit opt-in and are **not** governed by this switch. |
+
 ## Fallback Providers (config.yaml only)
 
 The primary model fallback chain is configured exclusively through `config.yaml` — there are no environment variables for it. Add a top-level `fallback_providers` list with `provider` and `model` keys to enable automatic failover when your main model encounters errors. Auxiliary tasks whose provider is `auto` also consult this chain before Hermes' built-in auxiliary discovery chain.

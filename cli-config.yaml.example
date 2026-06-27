@@ -433,11 +433,21 @@ prompt_caching:
 # =============================================================================
 # Hermes uses lightweight "auxiliary" models for side tasks: image analysis,
 # browser screenshot analysis, web page summarization, TTS audio-tag insertion,
-# and context compression.
+# session-title generation, and context/trajectory compression.
 #
-# By default these use Gemini Flash via OpenRouter or Nous Portal and are
-# auto-detected from your credentials.  You do NOT need to change anything
-# here for normal usage.
+# By default ("auto") these use YOUR main chat model — the same provider and
+# model you configured for chat, including a local endpoint.  Auxiliary tasks
+# only reach a cloud aggregator (OpenRouter / Nous Portal) as a *fallback*,
+# when your main provider has no working client AND you have such credentials
+# configured.  You do NOT need to change anything here for normal usage.
+#
+# PRIVACY: to guarantee side-task content (e.g. session titles, compression
+# snippets) never leaves a local main endpoint — even if cloud credentials
+# happen to be present — set HERMES_AUX_LOCAL_ONLY=1.  That disables the
+# cloud fallback: if the local provider is unavailable, the side task is
+# skipped instead of being routed to a vendor.  (Explicit per-task overrides
+# below, e.g. compression.provider: openrouter, are a deliberate opt-in and
+# are not affected by that switch.)
 #
 # WARNING: Overriding these with providers other than OpenRouter or Nous Portal
 # is EXPERIMENTAL and may not work.  Not all models/providers support vision,
@@ -449,7 +459,8 @@ prompt_caching:
 # local endpoint for compression (just needs text).
 #
 # Provider options:
-#   "auto"       - Best available: OpenRouter → Nous Portal → main endpoint (default)
+#   "auto"       - Your main chat model first; cloud aggregators (OpenRouter →
+#                  Nous Portal) only as a fallback when main has no client (default)
 #   "openrouter" - Force OpenRouter (requires OPENROUTER_API_KEY)
 #   "nous"       - Force Nous Portal (requires: hermes login)
 #   "gemini"      - Force Google AI Studio direct (requires: GOOGLE_API_KEY or GEMINI_API_KEY)
